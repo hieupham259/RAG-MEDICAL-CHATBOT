@@ -156,3 +156,6 @@ logs/
 
 # Chroma
 chroma_db/
+
+# Vector Store
+vectorstore/

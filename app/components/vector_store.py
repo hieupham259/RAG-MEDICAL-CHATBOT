@@ -36,15 +36,15 @@ def save_vector_store(text_chunks):
         
         logger.info("Generating your new vectorstore")
 
-        embedding_model = get_embedding_model()
+        embedding_model = get_embeddings_model()
 
-        db = FAISS.from_documents(text_chunks,embedding_model)
+        db = FAISS.from_documents(text_chunks, embedding_model)
 
-        logger.info("Saving vectorstoree")
+        logger.info("Saving vectorstore")
 
         db.save_local(DB_FAISS_PATH)
 
-        logger.info("Vectostore saved sucesfulyy...")
+        logger.info("Vectorstore saved successfully...")
 
         return db
     

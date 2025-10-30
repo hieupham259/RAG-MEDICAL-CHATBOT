@@ -7,9 +7,9 @@ from app.common.custom_exception import CustomException
 
 logger = get_logger(__name__)
 
-def load_llm(model_name: str = "llama-3.1-8b-instant", gemini_api_key: str = GEMINI_API_KEY):
+def load_llm(model_name: str = "gemini-2.5-flash", gemini_api_key: str = GEMINI_API_KEY):
     try:
-        logger.info("Loading LLM from Gemini using LLaMA3 model...")
+        logger.info("Loading LLM from Gemini using Gemini-2.5-Flash model...")
 
         llm = ChatGoogleGenerativeAI(
             api_key=gemini_api_key,
