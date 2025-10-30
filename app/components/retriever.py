@@ -39,7 +39,7 @@ def create_qa_chain():
         if llm is None:
             raise CustomException("LLM not loaded")
 
-        retriever = db.as_retriever(search_kwargs={'k': 1})
+        retriever = db.as_retriever(search_kwargs={'k': 3})
         
         if retriever is None:
             raise CustomException("Failed to create retriever tool")
@@ -80,8 +80,8 @@ if __name__ == "__main__":
             logger.error("Failed to create QA chain")
             exit(1)
 
-        # Question about chemotherapy
-        question = "What is the purpose of Chemotherapy?"
+        # Question about Chest drainage therapy
+        question = "What is the purpose of Chest drainage therapy?"
         
         logger.info(f"Processing question: {question}")
         
