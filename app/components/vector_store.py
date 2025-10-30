@@ -1,7 +1,7 @@
 import os
 from langchain_community.vectorstores import FAISS
 
-from app.components.embeddings import get_embedding_model
+from app.components.embeddings import get_embeddings_model
 from app.common.logger import get_logger
 from app.common.custom_exception import CustomException
 from app.config.config import DB_FAISS_PATH
@@ -14,7 +14,7 @@ def load_vector_store():
             raise CustomException("FAISS database path does not exist")
         
         logger.info(f"Loading FAISS vector store from {DB_FAISS_PATH}")
-        embeddings = get_embedding_model()
+        embeddings = get_embeddings_model()
         vector_store = FAISS.load_local(
             DB_FAISS_PATH, 
             embeddings,
