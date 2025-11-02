@@ -1,67 +1,59 @@
-# main.py
-import os
-import sys
-import time
-import threading
-import subprocess
-import runpy
+from flask import Flask, render_template, request,session, redirect,url_for
+from app.components.retriever import create_qa_chain
 from dotenv import load_dotenv
-from app.common.logger import get_logger
-from app.common.custom_exception import CustomException
+import os
 
-logger = get_logger(__name__)
 
 load_dotenv()
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, template_folder='app/templates')
+app.secret_key = os.urandom(24)
+load_dotenv()
 
-def run_backend():
-    try:
-        logger.info("Starting backend server (uvicorn)...")
-        # ensure using same python executable as this script
-        cmd = [sys.executable, "-m", "uvicorn", "app.backend.api:app", "--host", "127.0.0.1", "--port", "9999"]
-        subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
-    except Exception as e:
-        logger.exception("Backend server failed to start")
-        raise CustomException("Backend server failed to start", error_detail=e)
+from markupsafe import Markup
+def nl2br(value):
+    return Markup(value.replace("\n" , "<br>\n"))
 
-def run_frontend_in_same_process():
-    """
-    Run Streamlit CLI inside this process (no separate python subprocess),
-    after changing cwd to project root so imports like `from app...` work.
-    This preserves the Python environment and sys.path behavior (sys.path[0] -> cwd).
-    """
-    try:
-        logger.info("Starting frontend (Streamlit) in current process...")
-        # set argv as if running: streamlit run run_ui.py
-        run_ui_path = os.path.join(PROJECT_ROOT, "run_ui.py")
-        sys.argv = ["streamlit", "run", run_ui_path]
+app.jinja_env.filters['nl2br'] = nl2br
 
-        # run Streamlit CLI module in this process (blocks)
-        # This avoids Streamlit spawning another python that might change import context.
-        runpy.run_module("streamlit.web.cli", run_name="__main__")
-    except Exception as e:
-        logger.exception("Frontend failed to start in current process")
-        raise CustomException("Frontend failed to start", error_detail=e)
+@app.route("/" , methods=["GET","POST"])
+def index():
+    if "messages" not in session:
+        session["messages"]=[]
 
-if __name__ == "__main__":
-    try:
-        # change working directory to project root (do NOT touch sys.path)
-        os.chdir(PROJECT_ROOT)
-        logger.info("CWD set to project root: %s", PROJECT_ROOT)
+    if request.method=="POST":
+        user_input = request.form.get("prompt")
 
-        # start backend in a daemon thread (it will spawn uvicorn subprocess)
-        backend_thread = threading.Thread(target=run_backend, daemon=True)
-        backend_thread.start()
+        if user_input:
+            messages = session["messages"]
+            messages.append({"role" : "user" , "content": user_input})
+            session["messages"] = messages
 
-        # give backend a short moment to start
-        time.sleep(2)
+            try:
+                qa_chain = create_qa_chain()
+                if qa_chain is None:
+                    raise Exception("QA chain could not be created (LLM or VectorStore issue)")
+                response = qa_chain.invoke({"question" : user_input})
+                # print("Response from QA chain :" , response, type(response))
+                result = response.content
 
-        # run frontend in the same process (this will block until Streamlit exits)
-        run_frontend_in_same_process()
-        # run_backend()
-    except CustomException as e:
-        logger.exception("CustomException occurred: %s", str(e))
-    except KeyboardInterrupt:
-        logger.info("Shutting down due to KeyboardInterrupt")
-        # uvicorn subprocess will be terminated when main process exits (daemon thread)
+                messages.append({"role" : "assistant" , "content" : result})
+                session["messages"] = messages
+
+            except Exception as e:
+                error_msg = f"Error : {str(e)}"
+                return render_template("index.html" , messages = session["messages"] , error = error_msg)
+            
+        return redirect(url_for("index"))
+    return render_template("index.html" , messages=session.get("messages" , []))
+
+@app.route("/clear")
+def clear():
+    session.pop("messages" , None)
+    return redirect(url_for("index"))
+
+if __name__=="__main__":
+    app.run(host="0.0.0.0" , port=5000 , debug=True , use_reloader = True)
+
+
