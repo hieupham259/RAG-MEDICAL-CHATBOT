@@ -385,7 +385,7 @@
         </div>
 
         <div class="input-area">
-            <form method="post" action="{{ url_for('index') }}" id="chatForm">
+            <form id="chatForm">
                 <div class="input-container">
                     <textarea name="prompt" 
                               class="message-input" 
@@ -411,8 +411,12 @@
     </div>
 
     <script>
-        // Auto-resize textarea
+        const chatArea = document.getElementById('chatArea');
         const messageInput = document.getElementById('messageInput');
+        const chatForm = document.getElementById('chatForm');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Auto-resize textarea
         messageInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
@@ -422,13 +426,12 @@
         messageInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                document.getElementById('chatForm').submit();
+                chatForm.dispatchEvent(new Event('submit'));
             }
         });
 
         // Auto-scroll to bottom
         function scrollToBottom() {
-            const chatArea = document.getElementById('chatArea');
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
@@ -438,6 +441,166 @@
                 window.location.href = '{{ url_for("clear") }}';
             }
         }
+
+        // Function to add user message to chat
+        function addUserMessage(message) {
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message-container user';
+            messageContainer.innerHTML = `
+                <div class="message user">${escapeHtml(message).replace(/\n/g, '<br>')}</div>
+                <div class="avatar user">
+                    <i class="fas fa-user"></i>
+                </div>
+            `;
+            
+            // Remove empty state if exists
+            const emptyState = chatArea.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            chatArea.appendChild(messageContainer);
+            scrollToBottom();
+        }
+
+        // Function to add typing indicator
+        function addTypingIndicator() {
+            const typingContainer = document.createElement('div');
+            typingContainer.className = 'message-container assistant';
+            typingContainer.id = 'typingIndicator';
+            typingContainer.innerHTML = `
+                <div class="avatar assistant">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="typing-indicator">
+                    <div class="typing-dots">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            chatArea.appendChild(typingContainer);
+            scrollToBottom();
+        }
+
+        // Function to remove typing indicator
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        // Function to add assistant message
+        function addAssistantMessage(message) {
+            removeTypingIndicator();
+            
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'message-container assistant';
+            messageContainer.innerHTML = `
+                <div class="avatar assistant">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="message assistant">${escapeHtml(message).replace(/\n/g, '<br>')}</div>
+            `;
+            chatArea.appendChild(messageContainer);
+            scrollToBottom();
+        }
+
+        // Function to show error message
+        function showError(errorMsg) {
+            removeTypingIndicator();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${escapeHtml(errorMsg)}`;
+            
+            // Insert after header
+            const header = document.querySelector('.header');
+            header.insertAdjacentElement('afterend', errorDiv);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // Handle form submission
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Disable input and button
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+
+            // Add user message immediately
+            addUserMessage(message);
+            
+            // Clear input
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Show typing indicator
+            addTypingIndicator();
+
+            try {
+                // Send message to server
+                const response = await fetch('{{ url_for("chat") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Add assistant response
+                    addAssistantMessage(data.response);
+                    
+                    // Show clear button if not already visible
+                    const controls = document.querySelector('.controls');
+                    if (!controls) {
+                        const controlsDiv = document.createElement('div');
+                        controlsDiv.className = 'controls';
+                        controlsDiv.innerHTML = `
+                            <button type="button" class="clear-btn" onclick="clearChat()">
+                                <i class="fas fa-trash"></i>
+                                Clear Chat
+                            </button>
+                        `;
+                        document.querySelector('.input-area').appendChild(controlsDiv);
+                    }
+                } else {
+                    showError(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                showError('Failed to send message. Please try again.');
+                console.error('Error:', error);
+            } finally {
+                // Re-enable input and button
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        });
 
         // Scroll to bottom on load
         window.addEventListener('load', scrollToBottom);
